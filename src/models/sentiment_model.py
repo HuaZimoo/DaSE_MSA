@@ -51,64 +51,31 @@ class MultimodalSentimentModel(nn.Module):
             nn.Linear(config.hidden_dim // 2, config.num_classes)
         )
         
-    def forward(self, image_features, text_features):
+    def forward(self, image_features, text_features, use_image=True, use_text=True):
         # 获取CLIP的输出
-        image_outputs = self.clip.get_image_features(image_features)
-        text_outputs = self.clip.get_text_features(text_features)
+        image_outputs = self.clip.get_image_features(image_features) if use_image else None
+        text_outputs = self.clip.get_text_features(text_features) if use_text else None
         
         # 使用处理后的特征进行融合
-        fused_features = self.fusion_layer(image_outputs, text_outputs)
+        if use_image and use_text:
+            fused_features = self.fusion_layer(image_outputs, text_outputs)
+        elif use_image:
+            fused_features = image_outputs
+        elif use_text:
+            fused_features = text_outputs
+        else:
+            raise ValueError("At least one of use_image or use_text must be True.")
         
         # 分类
         logits = self.classifier(fused_features)
-        return logits 
+        return logits
 
 class OptimizedMultimodalSentimentModel(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.clip = CLIPModel.from_pretrained(config.clip_model_name)
-        
-        # 特征提取优化器
-        self.image_adapter = nn.Sequential(
-            nn.Linear(self.clip.config.vision_config.hidden_size, config.hidden_dim),
-            nn.LayerNorm(config.hidden_dim),
-            nn.Dropout(0.1),
-            nn.ReLU()
-        )
-        
-        self.text_adapter = nn.Sequential(
-            nn.Linear(self.clip.config.text_config.hidden_size, config.hidden_dim),
-            nn.LayerNorm(config.hidden_dim),
-            nn.Dropout(0.1),
-            nn.ReLU()
-        )
-        
-        # 分层解冻CLIP
-        self._freeze_clip_layers()
-        
-    def _freeze_clip_layers(self):
-        # 冻结大部分层
-        for param in self.clip.parameters():
-            param.requires_grad = False
-            
-        # 选择性解冻后面的层
-        unfreeze_layers = ['visual.transformer.resblocks.11', 
-                          'visual.transformer.resblocks.10',
-                          'text.transformer.resblocks.11',
-                          'text.transformer.resblocks.10']
-        
-        for name, param in self.clip.named_parameters():
-            if any(layer in name for layer in unfreeze_layers):
-                param.requires_grad = True
-        
-    def forward(self, image_features, text_features):
-        # 获取CLIP的输出
-        image_outputs = self.clip.get_image_features(image_features)
-        text_outputs = self.clip.get_text_features(text_features)
-        
-        # 使用处理后的特征进行融合
-        fused_features = self.fusion_layer(image_outputs, text_outputs)
-        
-        # 分类
-        logits = self.classifier(fused_features)
-        return logits 
+        # 实现优化版本的模型
+        pass
+
+    def forward(self, images, texts, use_image=True, use_text=True):
+        # 实现前向传播
+        pass

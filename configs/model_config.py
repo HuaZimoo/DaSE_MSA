@@ -46,9 +46,10 @@ class ModelConfig:
         self.augment_minority_only = True  # 只增强少数类样本
         
         # 融合策略配置
-        self.fusion_type = 'enhanced_concat'
+        self.fusion_type = 'concat'
         self.interaction_dim = 256  # 交互特征维度
         self.use_layer_norm = True
+        self.fusion_heads = 8  # 多头注意力的头数
         
         # 交叉验证配置
         self.n_splits = 5  # 5折交叉验证

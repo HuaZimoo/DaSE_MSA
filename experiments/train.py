@@ -16,7 +16,7 @@ import datetime
 import argparse
 import numpy as np
 
-from src.models.sentiment_model import MultimodalSentimentModel, OptimizedMultimodalSentimentModel
+from src.models.sentiment_model import MultimodalSentimentModel
 from src.data.dataset import MultimodalDataset, collate_fn, get_balanced_sampler
 from configs.model_config import ModelConfig
 
@@ -33,7 +33,7 @@ def get_device():
         print("Using CPU")
     return device
 
-def train_model(config, model, train_loader, val_loader):
+def train_model(config, model, train_loader, val_loader, use_image=True, use_text=True):
     """训练模型并返回最佳模型状态和指标"""
     # 设置tensorboard
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
@@ -103,7 +103,7 @@ def train_model(config, model, train_loader, val_loader):
             texts = batch['text'].to(device)
             labels = batch['label'].to(device)
             
-            outputs = model(images, texts)
+            outputs = model(images, texts, use_image=use_image, use_text=use_text)
             loss = criterion(outputs, labels)
             
             loss.backward()
@@ -143,7 +143,7 @@ def train_model(config, model, train_loader, val_loader):
                 texts = batch['text'].to(device)
                 labels = batch['label'].to(device)
                 
-                outputs = model(images, texts)
+                outputs = model(images, texts, use_image=use_image, use_text=use_text)
                 loss = criterion(outputs, labels)
                 
                 val_loss += loss.item()
@@ -200,16 +200,21 @@ def train_model(config, model, train_loader, val_loader):
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser()
+    # 模态融合类型参数
     parser.add_argument('--fusion_type', type=str, default='concat', 
                        choices=['concat', 'attention', 'gated', 'bilinear', 'enhanced_concat'])
     
-    # 添加新的参数
-    parser.add_argument('--feature_adaptation', action='store_true', 
-                       help='使用特征适配层')
-    parser.add_argument('--unfreeze_layers', type=int, default=2,
-                       help='解冻CLIP最后几层')
+    # 特征适配相关参数
+    parser.add_argument('--feature_adaptation', action='store_true')
+    parser.add_argument('--unfreeze_layers', type=int, default=2)
     
-    # 原有的参数
+    # 模态使用参数
+    parser.add_argument('--use_image', action='store_true', default=True)
+    parser.add_argument('--no_image', action='store_false', dest='use_image')
+    parser.add_argument('--use_text', action='store_true', default=True)
+    parser.add_argument('--no_text', action='store_false', dest='use_text')
+    
+    # 其他训练参数
     parser.add_argument('--use_weighted_loss', action='store_true')
     parser.add_argument('--no_weighted_loss', action='store_false', dest='use_weighted_loss')
     parser.add_argument('--use_balanced_sampler', action='store_true')
@@ -249,6 +254,13 @@ def main():
     # 创建必要的目录
     os.makedirs('runs', exist_ok=True)  # 确保日志目录存在
     os.makedirs(config.checkpoint_dir, exist_ok=True)  # 确保模型保存目录存在
+    
+    # 打印配置信息
+    print("\nTraining with following configuration:")
+    print(f"Fusion Type: {config.fusion_type}")
+    print(f"Feature Adaptation: {config.feature_adaptation}")
+    print(f"Use Image: {args.use_image}")
+    print(f"Use Text: {args.use_text}")
     
     # 初始化数据集和模型
     processor = CLIPProcessor.from_pretrained(config.clip_model_name)
@@ -301,15 +313,18 @@ def main():
     )
     
     # 根据参数选择模型
-    if config.feature_adaptation:
-        model = OptimizedMultimodalSentimentModel(config)
-        print("Using OptimizedMultimodalSentimentModel with feature adaptation")
-    else:
-        model = MultimodalSentimentModel(config)
-        print("Using MultimodalSentimentModel")
+    model = MultimodalSentimentModel(config)
+    print("Using MultimodalSentimentModel")
     
     # 训练模型
-    best_model_state, metrics = train_model(config, model, train_loader, val_loader)
+    best_model_state, metrics = train_model(
+        config, 
+        model, 
+        train_loader, 
+        val_loader, 
+        args.use_image, 
+        args.use_text
+    )
     
     # 保存最佳模型
     save_path = os.path.join(config.checkpoint_dir, 
