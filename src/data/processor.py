@@ -22,13 +22,8 @@ class TextPreprocessor:
         return text.strip()
     
     def normalize_text(self, text: str) -> str:
-        """
-        标准化文本
-        """
-        # 转换为小写
         text = text.lower()
-        
-        # 替换常见缩写
+
         text = text.replace("'m", " am")
         text = text.replace("'s", " is")
         text = text.replace("'re", " are")
@@ -44,17 +39,14 @@ class MultimodalPreprocessor:
         self.processor = processor
     
     def __call__(self, text, image):
-        # 处理输入
         inputs = self.processor(
             text=text,
             images=image,
             return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=77  # CLIP 的默认最大长度
+            max_length=77  
         )
-        
-        # 去掉批次维度
         return {
             'pixel_values': inputs['pixel_values'].squeeze(0),
             'input_ids': inputs['input_ids'].squeeze(0),
@@ -63,13 +55,11 @@ class MultimodalPreprocessor:
     
     def test_text_preprocessing():
         preprocessor = TextPreprocessor()
-        
-        # 测试文本
+    
         test_cases = [
             "grattis min griskulting!!!???? va bara tvungen oki s? sch ? @ingenkommeratttrodig #pig #happybday #wow #lovely #cut�� "
         ]
-        
-        # 处理并打印结果
+    
         for text in test_cases:
             cleaned_text = preprocessor.clean_text(text)
             print(f"Original: {text}")

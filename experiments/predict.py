@@ -12,7 +12,6 @@ from src.data.dataset import MultimodalDataset, collate_fn
 from configs.model_config import ModelConfig
 
 def get_device():
-    """获取可用的计算设备"""
     if torch.backends.mps.is_available():
         device = torch.device("mps")
         print("Using MPS device")
@@ -25,14 +24,12 @@ def get_device():
     return device
 
 def predict():
-    # 配置初始化
     config = ModelConfig()
-    config.fusion_type = 'bilinear'  # 使用双线性融合
-    config.use_balanced_sampler = True  # 保持与训练时一致
-    config.use_augmentation = True  # 保持与训练时一致
+    config.fusion_type = 'bilinear'  
+    config.use_balanced_sampler = True  
+    config.use_augmentation = True  
     
-    # 加载最佳模型（添加weights_only=True）
-    checkpoint_path = 'outputs/experiments/ablation_text_only_bilinear_Jan21_15-06-20_best.pth'
+    checkpoint_path = 'outputs/experiments/ablation_both_bilinear_Jan21_14-27-57_best.pth' # 更改为你的最佳模型路径
     print(f"\nLoading checkpoint from {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, weights_only=True)
     
@@ -43,12 +40,11 @@ def predict():
     model = model.to(device)
     model.eval()
     
-    # 准备数据（移除is_test参数）
     processor = CLIPProcessor.from_pretrained(config.clip_model_name)
     test_dataset = MultimodalDataset(
         config=config,
         processor=processor,
-        annotation_file='data/test_without_label.txt'  # 移除is_test参数
+        annotation_file='data/test_without_label.txt' 
     )
     
     test_loader = DataLoader(
@@ -60,15 +56,13 @@ def predict():
         collate_fn=collate_fn
     )
     
-    # 读取测试集的GUID
     test_guids = []
     with open('data/test_without_label.txt', 'r') as f:
-        next(f)  # 跳过header行
+        next(f) 
         for line in f:
             guid = line.strip().split(',')[0]
             test_guids.append(guid)
     
-    # 进行预测
     print("\nGenerating predictions...")
     predictions = []
     with torch.no_grad():
@@ -79,20 +73,17 @@ def predict():
             preds = torch.argmax(outputs, dim=1)
             predictions.extend(preds.cpu().numpy())
     
-    # 保存预测结果
     output_file = 'predictions.txt'
     print(f"\nSaving predictions to {output_file}")
     
-    # 数字标签转换为文本标签
     id_to_label = {
         0: 'negative',
         1: 'neutral',
         2: 'positive'
     }
     
-    # 按照原格式写入结果
     with open(output_file, 'w') as f:
-        f.write('guid,tag\n')  # 写入header
+        f.write('guid,tag\n') 
         for guid, pred in zip(test_guids, predictions):
             label = id_to_label[pred]
             f.write(f'{guid},{label}\n')

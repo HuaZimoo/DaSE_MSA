@@ -11,42 +11,36 @@ def detect_encoding(file_path):
 
 def verify_dataset(data_dir, annotation_file):
     """验证数据集完整性"""
-    # 读取标签文件
     df = pd.read_csv(annotation_file)
     
-    # 检查每个样本
     missing_files = []
     corrupted_files = []
     encoding_issues = []
     
     for guid in df['guid']:
-        # 检查图像文件
         image_path = os.path.join(data_dir, f"{guid}.jpg")
         if not os.path.exists(image_path):
             missing_files.append(image_path)
         else:
             try:
                 with Image.open(image_path) as img:
-                    img.verify()  # 验证图像完整性
+                    img.verify()  
             except Exception as e:
                 corrupted_files.append((image_path, str(e)))
         
-        # 检查文本文件
         text_path = os.path.join(data_dir, f"{guid}.txt")
         if not os.path.exists(text_path):
             missing_files.append(text_path)
         else:
             try:
-                # 检测文件编码
                 encoding = detect_encoding(text_path)
                 if encoding is None:
                     encoding_issues.append(text_path)
                     continue
                     
-                # 尝试读取文本
                 with open(text_path, 'r', encoding=encoding) as f:
                     text = f.read().strip()
-                    if not text:  # 检查是否为空文件
+                    if not text:  
                         corrupted_files.append((text_path, "Empty file"))
             except Exception as e:
                 corrupted_files.append((text_path, str(e)))
@@ -54,7 +48,6 @@ def verify_dataset(data_dir, annotation_file):
     return missing_files, corrupted_files, encoding_issues
 
 def main():
-    # 配置路径
     data_dir = "data/data"
     train_file = "data/train.txt"
     test_file = "data/test_without_label.txt"

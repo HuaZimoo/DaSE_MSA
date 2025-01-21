@@ -21,7 +21,6 @@ from src.data.dataset import MultimodalDataset, collate_fn, get_balanced_sampler
 from configs.model_config import ModelConfig
 
 def get_device():
-    """获取可用的计算设备"""
     if torch.backends.mps.is_available():
         device = torch.device("mps")
         print("Using MPS device")
@@ -34,8 +33,6 @@ def get_device():
     return device
 
 def train_model(config, model, train_loader, val_loader, use_image=True, use_text=True):
-    """训练模型并返回最佳模型状态和指标"""
-    # 设置tensorboard
     current_time = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
     log_dir = os.path.join('runs', f'{config.strategy_name}_{current_time}')
     writer = SummaryWriter(log_dir)
@@ -43,17 +40,14 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
     device = get_device()
     model = model.to(device)
     
-    # 计算类别权重
     label_counts = torch.bincount(torch.tensor([batch['label'] for batch in train_loader.dataset]))
     weights = 1.0 / label_counts.float()
     weights = weights / weights.sum()
     weights = weights.to(device)
     
-    # 可选的带权重的交叉熵损失
     criterion = nn.CrossEntropyLoss(weight=weights if config.use_weighted_loss else None, 
                                   label_smoothing=config.label_smoothing)
     
-    # 分层设置学习率
     clip_backbone_params = []
     clip_head_params = []
     other_params = []
@@ -68,14 +62,12 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
             else:
                 other_params.append(param)
     
-    # 优化器配置
     optimizer = optim.AdamW([
         {'params': clip_backbone_params, 'lr': config.learning_rate * 0.01},
         {'params': clip_head_params, 'lr': config.learning_rate * 0.1},
         {'params': other_params, 'lr': config.learning_rate}
     ], weight_decay=config.weight_decay)
     
-    # 学习率调度器
     num_training_steps = len(train_loader) * config.num_epochs
     num_warmup_steps = int(num_training_steps * config.warmup_ratio)
     scheduler = get_linear_schedule_with_warmup(
@@ -90,7 +82,6 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
     no_improve = 0
     
     for epoch in range(config.num_epochs):
-        # 训练阶段
         model.train()
         train_loss = 0
         train_preds = []
@@ -117,13 +108,11 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
             train_preds.extend(preds)
             train_labels.extend(labels.cpu().numpy())
             
-            # 记录训练信息
             writer.add_scalar('Loss/train_step', loss.item(),
                             epoch * len(train_loader) + batch_idx)
             writer.add_scalar('Learning Rate', scheduler.get_last_lr()[0],
                             epoch * len(train_loader) + batch_idx)
         
-        # 计算训练指标
         train_loss = train_loss / len(train_loader)
         train_f1 = f1_score(train_labels, train_preds, average='macro')
         train_acc = accuracy_score(train_labels, train_preds)
@@ -131,7 +120,6 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
         print(f"\nEpoch {epoch+1} Training Metrics:")
         print(f"Loss: {train_loss:.4f} | F1: {train_f1:.4f} | Acc: {train_acc:.4f}")
         
-        # 验证阶段
         model.eval()
         val_loss = 0
         val_preds = []
@@ -158,7 +146,6 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
         print("\nValidation Metrics:")
         print(f"Loss: {val_loss:.4f} | F1: {val_f1:.4f} | Acc: {val_acc:.4f}")
         
-        # 记录每个epoch的指标
         writer.add_scalars('Loss', {
             'train': train_loss,
             'val': val_loss
@@ -172,7 +159,6 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
             'val': val_acc
         }, epoch)
         
-        # 更新最佳模型
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             best_model = model.state_dict().copy()
@@ -189,7 +175,6 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
         else:
             no_improve += 1
         
-        # 早停
         if no_improve >= config.patience:
             print(f"Early stopping at epoch {epoch+1}")
             break
@@ -198,23 +183,16 @@ def train_model(config, model, train_loader, val_loader, use_image=True, use_tex
     return best_model, best_metrics
 
 def parse_args():
-    """解析命令行参数"""
     parser = argparse.ArgumentParser()
-    # 模态融合类型参数
-    parser.add_argument('--fusion_type', type=str, default='concat', 
-                       choices=['concat', 'attention', 'gated', 'bilinear', 'enhanced_concat'])
-    
-    # 特征适配相关参数
+    parser.add_argument('--fusion_type', type=str, default='concat', choices=['concat', 'attention', 'gated', 'bilinear', 'enhanced_concat'])
     parser.add_argument('--feature_adaptation', action='store_true')
     parser.add_argument('--unfreeze_layers', type=int, default=2)
-    
-    # 模态使用参数
+
     parser.add_argument('--use_image', action='store_true', default=True)
     parser.add_argument('--no_image', action='store_false', dest='use_image')
     parser.add_argument('--use_text', action='store_true', default=True)
     parser.add_argument('--no_text', action='store_false', dest='use_text')
     
-    # 其他训练参数
     parser.add_argument('--use_weighted_loss', action='store_true')
     parser.add_argument('--no_weighted_loss', action='store_false', dest='use_weighted_loss')
     parser.add_argument('--use_balanced_sampler', action='store_true')
@@ -233,10 +211,8 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    """主函数"""
     args = parse_args()
     
-    # 配置初始化
     config = ModelConfig()
     config.fusion_type = args.fusion_type
     config.use_weighted_loss = args.use_weighted_loss
@@ -245,24 +221,20 @@ def main():
     config.feature_adaptation = args.feature_adaptation
     config.unfreeze_layers = args.unfreeze_layers
     
-    # 设置实验名称
     if args.exp_name:
         config.strategy_name = args.exp_name
     else:
         config.strategy_name = f"{config.fusion_type}_{'w' if config.use_weighted_loss else 'n'}_{'b' if config.use_balanced_sampler else 'n'}_{'a' if config.use_augmentation else 'n'}"
     
-    # 创建必要的目录
-    os.makedirs('runs', exist_ok=True)  # 确保日志目录存在
-    os.makedirs(config.checkpoint_dir, exist_ok=True)  # 确保模型保存目录存在
-    
-    # 打印配置信息
+    os.makedirs('runs', exist_ok=True)  
+    os.makedirs(config.checkpoint_dir, exist_ok=True)  
+
     print("\nTraining with following configuration:")
     print(f"Fusion Type: {config.fusion_type}")
     print(f"Feature Adaptation: {config.feature_adaptation}")
     print(f"Use Image: {args.use_image}")
     print(f"Use Text: {args.use_text}")
-    
-    # 初始化数据集和模型
+
     processor = CLIPProcessor.from_pretrained(config.clip_model_name)
     dataset = MultimodalDataset(
         config=config,
@@ -271,7 +243,6 @@ def main():
         augment=config.use_augmentation
     )
     
-    # 划分数据集
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(
@@ -280,9 +251,7 @@ def main():
         generator=torch.Generator().manual_seed(config.cv_random_seed)
     )
     
-    # 创建数据加载器
     if config.use_balanced_sampler:
-        # 直接传递标签列表
         labels = [dataset.samples[i]['label'] for i in train_dataset.indices]
         train_sampler = get_balanced_sampler(labels)
         train_loader = DataLoader(
@@ -312,11 +281,9 @@ def main():
         collate_fn=collate_fn
     )
     
-    # 根据参数选择模型
     model = MultimodalSentimentModel(config)
     print("Using MultimodalSentimentModel")
     
-    # 训练模型
     best_model_state, metrics = train_model(
         config, 
         model, 
@@ -325,8 +292,7 @@ def main():
         args.use_image, 
         args.use_text
     )
-    
-    # 保存最佳模型
+
     save_path = os.path.join(config.checkpoint_dir, 
                             f'{config.strategy_name}_{datetime.datetime.now().strftime("%b%d_%H-%M-%S")}_best.pth')
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -338,7 +304,6 @@ def main():
     }, save_path)
     print(f"Saved best checkpoint to {save_path}")
     
-    # 打印最终结果
     print("\nTraining completed!")
     print(f"Best epoch: {metrics['epoch']}")
     print(f"Validation F1: {metrics['val_f1']:.4f}")
