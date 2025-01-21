@@ -1,118 +1,89 @@
-# 多模态情感分析实验报告
+# MSAClip: 基于CLIP的多模态情感分析
 
-## 1. 实验概述
+这是一个基于CLIP预训练模型的多模态情感分析项目实现，可以对配对的图像-文本数据进行情感标签（positive、neutral、negative）预测。
 
-### 1.1 实验目标
-- 基于 CLIP 模型实现多模态情感分析
-- 通过图像和文本的融合提高情感分类准确率
-- 探索不同模型架构和训练策略的效果
+## 环境配置
 
-### 1.2 数据集描述
-- 数据集来源：[描述数据集来源]
-- 数据集规模：共 X 条样本
-- 数据分布：
-  - 正面情感：X 条
-  - 中性情感：X 条
-  - 负面情感：X 条
-- 数据格式：图像(.jpg) + 文本(.txt)
+本项目基于Python3实现，运行代码需要以下依赖：
 
-## 2. 模型架构
+- torch>=2.1.0
+- transformers>=4.35.2
+- numpy>=1.24.3
+- pandas>=2.1.1
+- scikit-learn>=1.3.2
+- Pillow>=10.1.0
+- chardet>=5.2.0
+- tensorboard>=2.14.1
+- tqdm>=4.66.1
+- openai-clip>=1.0.0
+- matplotlib>=3.8.2
 
-### 2.1 基础模型
-- 使用预训练的 CLIP 模型 (openai/clip-vit-base-patch32)
-- 图像编码器：ViT-B/32
-- 文本编码器：CLIP Text Transformer
+可以直接运行以下命令安装：
+```bash
+pip install -r requirements.txt
+```
 
-### 2.2 改进设计
-1. 特征提取层
-   - 解冻 CLIP 后5层 Transformer blocks
-   - 保留预训练权重作为特征初始化
+## 项目结构
+以下是主要文件的详细说明：
+```
+MSAClip/
+├── README.md        # 项目说明文档
+├── requirements.txt # 项目依赖
+├── src/             # 源代码目录
+│ ├── init.py
+│ ├── data/          # 数据处理相关
+│ │ ├── dataset.py   # 数据集实现
+│ │ └── processor.py # 数据预处理
+│ ├── models/        # 模型相关
+│ │ ├── init.py
+│ │ ├── sentiment_model.py # 情感分析模型
+│ │ └── fusion.py          # 融合策略实现
+│ └── utils/         # 工具函数
+│ │ └── metrics.py   # 评估指标
+└── scripts/         # 实验相关脚本文件
+```
 
-2. 多模态融合层
-   ```python
-   self.fusion_layer = nn.Sequential(
-       nn.Linear(self.feature_dim * 2, config.hidden_dim),
-       nn.GELU(),
-       nn.Dropout(0.5),
-       nn.LayerNorm(config.hidden_dim),
-       nn.Linear(config.hidden_dim, config.hidden_dim),
-       nn.GELU(),
-       nn.Dropout(0.3),
-       nn.LayerNorm(config.hidden_dim)
-   )
-   ```
+## 训练流程
 
-3. 分类头设计
-   ```python
-   self.classifier = nn.Sequential(
-       nn.Linear(config.hidden_dim, config.hidden_dim // 2),
-       nn.GELU(),
-       nn.Dropout(0.4),
-       nn.LayerNorm(config.hidden_dim // 2),
-       nn.Linear(config.hidden_dim // 2, config.num_classes)
-   )
-   ```
+1. 可以运行不同的实验策略：
 
-## 3. 训练策略
+运行模态消融实验
+```
+bash experiments/modality_ablation.sh
+```
 
-### 3.1 超参数设置
-- 批次大小：32
-- 学习率：5e-5（主干网络）
-  - CLIP backbone: 0.01 × 基础学习率
-  - CLIP head: 0.1 × 基础学习率
-  - 其他层: 基础学习率
-- 训练轮数：15
-- 权重衰减：0.01
-- 预热比例：0.1
-- 标签平滑：0.1
+运行融合策略实验
+```
+bash experiments/fusion_strategy_exp.sh
+```
 
-### 3.2 优化技巧
-1. 学习率预热和调度
-2. 梯度裁剪
-3. 早停机制（patience=5）
-4. 标签平滑正则化
+运行数据处理策略实验
+```
+bash experiments/single_strategy_exp.sh
+```
 
-## 4. 实验结果
+2. 也可以使用特定配置进行训练：
+```
+python experiments/train.py \
+--fusion_type bilinear \
+--use_balanced_sampler \
+--use_augmentation \
+--use_image --use_text
+```
 
-### 4.1 模型性能
-- 最佳验证集性能（第X轮）：
-  - F1分数：X.XXX
-  - 准确率：X.XXX
-  - 损失：X.XXX
+更多实验细节可以参考'experiments/'目录下的shell脚本。
 
-### 4.2 训练过程分析
-[插入 TensorBoard 可视化图表]
-- 训练损失曲线
-- 验证损失曲线
-- F1分数变化
-- 准确率变化
-- 学习率变化
+## 预测流程
 
-### 4.3 错误分析
-- 典型错误案例分析
-- 模型的优势和局限性
+1. 训练完成后，可以对测试集进行预测：
+```
+python experiments/predict.py
+```
 
-## 5. 改进方向
+这将生成与test_without_label.txt格式相同的预测结果。
 
-1. 模型架构改进
-   - [ ] 尝试不同的融合策略
-   - [ ] 添加注意力机制
-   - [ ] 探索其他预训练模型
+## 引用
 
-2. 训练策略优化
-   - [ ] 数据增强
-   - [ ] 对抗训练
-   - [ ] 交叉验证
-
-3. 工程实践改进
-   - [ ] 模型压缩
-   - [ ] 推理加速
-   - [ ] 部署优化
-
-## 6. 结论与思考
-
-[总结实验的主要发现和insights]
-
-## 附录
-
-### A. 环境配置
+本代码部分基于以下开源项目：
+- [CLIP](https://github.com/openai/CLIP)
+- [Transformers](https://github.com/huggingface/transformers)
