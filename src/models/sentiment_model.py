@@ -69,13 +69,3 @@ class MultimodalSentimentModel(nn.Module):
         # 分类
         logits = self.classifier(fused_features)
         return logits
-
-class OptimizedMultimodalSentimentModel(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        # 实现优化版本的模型
-        pass
-
-    def forward(self, images, texts, use_image=True, use_text=True):
-        # 实现前向传播
-        pass

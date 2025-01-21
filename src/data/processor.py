@@ -4,6 +4,8 @@ from typing import List, Optional
 class TextPreprocessor:
     def __init__(self):
         self.url_pattern = re.compile(r'https?://\S+|www\.\S+')
+        self.non_ascii_pattern = re.compile(r'[^\x00-\x7F]+')
+        self.hashtag_pattern = re.compile(r'#(\w+)') 
         self.emoji_pattern = re.compile("["
             u"\U0001F600-\U0001F64F"  # emoticons
             u"\U0001F300-\U0001F5FF"  # symbols & pictographs
@@ -12,16 +14,9 @@ class TextPreprocessor:
             "]+", flags=re.UNICODE)
     
     def clean_text(self, text: str) -> str:
-        """
-        清理文本
-        """
-        # 移除URL
         text = self.url_pattern.sub('', text)
-        
-        # 替换表情符号为文本描述
-        text = self.emoji_pattern.sub('', text)
-        
-        # 移除多余空白
+        text = self.non_ascii_pattern.sub('', text)
+        text = self.hashtag_pattern.sub(r'\1', text)
         text = ' '.join(text.split())
         
         return text.strip()
@@ -65,3 +60,17 @@ class MultimodalPreprocessor:
             'input_ids': inputs['input_ids'].squeeze(0),
             'attention_mask': inputs['attention_mask'].squeeze(0)
         } 
+    
+    def test_text_preprocessing():
+        preprocessor = TextPreprocessor()
+        
+        # 测试文本
+        test_cases = [
+            "grattis min griskulting!!!???? va bara tvungen oki s? sch ? @ingenkommeratttrodig #pig #happybday #wow #lovely #cut�� "
+        ]
+        
+        # 处理并打印结果
+        for text in test_cases:
+            cleaned_text = preprocessor.clean_text(text)
+            print(f"Original: {text}")
+            print(f"Cleaned: {cleaned_text}\n")
